@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-jose[cryptography]
+pymysql
+sqlalchemy
+pydantic[email]
+
+
+--- IGNORE ---
+python -m uvicorn app.main:app --reload
