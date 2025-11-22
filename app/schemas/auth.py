@@ -13,7 +13,7 @@ class RegisterIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    username: str
+    email: str
     password: str
 
 
@@ -26,7 +26,9 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-class TokenPair(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
+class AuthUserResponse(BaseModel):
+    user: UserOut
+
+
+class MessageResponse(BaseModel):
+    detail: str

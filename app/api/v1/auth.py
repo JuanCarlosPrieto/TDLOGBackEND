@@ -1,14 +1,14 @@
-from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
 from sqlalchemy.orm import Session
+from jose import jwt, JWTError
 
 from app.api.deps import get_db, get_current_user
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password, verify_password, ALGO
 from app.core.security import create_access_token, create_refresh_token
 from app.core.config import settings
 from app.db.models.user import User
-from app.db.models.authtoken import AuthToken
-from app.schemas.auth import RegisterIn, LoginIn, UserOut, TokenPair
+from app.schemas.auth import RegisterIn, LoginIn, UserOut, AuthUserResponse
+from app.schemas.auth import MessageResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -38,58 +38,81 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 
 
 # ---------- Login (access + refresh) ----------
-@router.post("/login", response_model=TokenPair)
-def login(body: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == body.username).first()
+@router.post("/login", response_model=AuthUserResponse)
+def login(body: LoginIn, response: Response, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
     if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access = create_access_token(user.username)
+    access_token = create_access_token(sub=user.username)
+    refresh_token = create_refresh_token(sub=user.username)
 
-    # Crear refresh y guardarlo en DB
-    refresh = create_refresh_token()
-    expires_at = datetime.now(timezone.utc) +\
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    db.add(AuthToken(userid=user.userid, refreshtoken=refresh,
-                     expiresat=expires_at))
-    db.commit()
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+    )
 
-    return {"access_token": access, "refresh_token": refresh}
+    return {"user": user}
 
 
 # ---------- Refresh ----------
-@router.post("/refresh", response_model=TokenPair)
-def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
-    token_row = (
-        db.query(AuthToken)
-        .filter(AuthToken.refreshtoken == refresh_token)
-        .first()
-    )
-    if not token_row:
-        raise HTTPException(status_code=401, detail="Refresh token inválido")
-    if datetime.now(timezone.utc) >\
-            token_row.expiresat.replace(tzinfo=timezone.utc):
-        raise HTTPException(status_code=401, detail="Refresh token expirado")
+@router.post("/refresh", response_model=MessageResponse)
+def refresh_token(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token")
 
-    user = db.query(User).filter(User.userid == token_row.userid).first()
+    try:
+        payload = jwt.decode(refresh_token, settings.JWT_SECRET,
+                             algorithms=[ALGO])
+        if payload.get("type") != "refresh":
+            raise ValueError("not refresh")
+        username: str = payload.get("sub")
+        if not username:
+            raise ValueError("no sub")
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+        raise HTTPException(status_code=401, detail="User not found")
 
-    # Rotación simple: emitir nuevo refresh y borrar el anterior
-    db.delete(token_row)
-    new_refresh = create_refresh_token()
-    new_expires = datetime.now(timezone.utc) +\
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    db.add(AuthToken(userid=user.userid, refreshtoken=new_refresh,
-                     expiresat=new_expires))
-    db.commit()
+    new_access = create_access_token(sub=user.username)
+    response.set_cookie(
+        key="access_token",
+        value=new_access,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
-    new_access = create_access_token(user.username)
-    return {"access_token": new_access, "refresh_token": new_refresh}
+    return {"detail": "access token refreshed"}
 
 
 # ---------- Perfil rápido ----------
 @router.get("/me", response_model=UserOut)
-def me(authorization: str = Header(...), db: Session = Depends(get_db)):
-    user = get_current_user(authorization, db)
-    return user
+def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.post("/logout", response_model=MessageResponse,)
+def logout(response: Response):
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return {"detail": "logged out"}
