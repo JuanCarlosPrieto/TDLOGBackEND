@@ -20,12 +20,16 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
                              (User.email == body.email)).first():
         raise HTTPException(status_code=400,
                             detail="Usuario o email ya existe")
+
+    print(body.password)
     user = User(
         email=body.email,
         username=body.username,
         name=body.name,
         surname=body.surname,
         password_hash=hash_password(body.password),
+        birthdate=body.birthdate,
+        country=body.country,
     )
     db.add(user)
     db.commit()

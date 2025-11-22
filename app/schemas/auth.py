@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from datetime import date
 
 
 class RegisterIn(BaseModel):
@@ -7,6 +8,8 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=6, max_length=128)
     name: str | None = None
     surname: str | None = None
+    birthdate: date | None = None  # ISO format date string
+    country: str | None = None
 
 
 class LoginIn(BaseModel):

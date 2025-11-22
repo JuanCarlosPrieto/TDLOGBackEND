@@ -5,7 +5,16 @@ python-jose[cryptography]
 pymysql
 sqlalchemy
 pydantic[email]
+pydantic_settings
+passlib
 
 
 --- IGNORE ---
 python -m uvicorn app.main:app --reload
+
+
+--- BUGS AND SOLUTION ---
+
+--- If 72 bits error occurs
+pip install "bcrypt==3.2.2" --force-reinstall
+pip install "passlib==1.7.4" --force-reinstall
