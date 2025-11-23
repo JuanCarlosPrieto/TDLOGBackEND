@@ -28,8 +28,8 @@ def get_current_user(
     try:
         payload = jwt.decode(access_token, settings.JWT_SECRET,
                              algorithms=[ALGO])
-        username: str = payload.get("sub")
-        if not username:
+        email: str = payload.get("sub")
+        if not email:
             raise ValueError("no sub")
     except (JWTError, ValueError):
         raise HTTPException(
@@ -37,7 +37,7 @@ def get_current_user(
             detail="Invalid token",
         )
 
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
