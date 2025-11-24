@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from passlib.context import CryptContext
-from secrets import token_urlsafe
 from app.core.config import settings
 
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -24,6 +23,13 @@ def create_access_token(sub: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGO)
 
 
-def create_refresh_token() -> str:
-    # Opaque, aleatorio
-    return token_urlsafe(48)
+def create_refresh_token(sub: str) -> str:
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = {
+        "sub": sub,
+        "iat": int(now.timestamp()),
+        "exp": int(exp.timestamp()),
+        "type": "refresh",
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGO)

@@ -5,7 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     PROJECT_NAME: str = "checkers-api"
     MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = "password"
+    MYSQL_PASSWORD: str = "root"
     MYSQL_HOST: str = "127.0.0.1"
     MYSQL_PORT: int = 3306
     MYSQL_DB: str = "checkers"

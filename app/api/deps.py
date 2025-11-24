@@ -1,9 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Cookie
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.models.user import User
+from app.core.security import ALGO
 
 
 def get_db():
@@ -14,21 +15,29 @@ def get_db():
         db.close()
 
 
-def get_current_user(authorization: str,
-                     db: Session = Depends(get_db)) -> User:
-    if authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1]
-    else:
-        token = authorization
+def get_current_user(
+    access_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db)
+) -> User:
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        username: str = payload.get("sub")
-        if not username:
+        payload = jwt.decode(access_token, settings.JWT_SECRET,
+                             algorithms=[ALGO])
+        email: str = payload.get("sub")
+        if not email:
             raise ValueError("no sub")
     except (JWTError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Token inválido")
-    user = db.query(User).filter(User.username == username).first()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user = db.query(User).filter(User.email == email).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Usuario no existe")
+        raise HTTPException(status_code=401, detail="User not found")
     return user
