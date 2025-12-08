@@ -7,6 +7,8 @@ sqlalchemy
 pydantic[email]
 pydantic_settings
 passlib
+pytest httpx pytest-asyncio pytest-cov
+fastapi[all]
 
 
 --- IGNORE ---
