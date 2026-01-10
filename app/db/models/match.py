@@ -1,11 +1,11 @@
-from sqlalchemy import Enum, Column, BigInteger, DateTime, ForeignKey
+from sqlalchemy import Enum, Column, BigInteger, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
 
 match_status_enum = Enum(
     "waiting",
-    "ongoning",
+    "ongoing",
     "finished",
     "aborted",
     name="match_status"
@@ -36,7 +36,7 @@ class Match(Base):
     __tablename__ = "matches"
 
     matchid = Column(BigInteger, primary_key=True, autoincrement=True)
-    startedat = Column(DateTime, nullable=False)
+    startedat = Column(DateTime, nullable=False, server_default=func.now())
     finishedat = Column(DateTime)
     whiteuser = Column(BigInteger, ForeignKey("users.userid"))
     blackuser = Column(BigInteger, ForeignKey("users.userid"))

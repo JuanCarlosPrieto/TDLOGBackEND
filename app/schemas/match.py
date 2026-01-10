@@ -12,7 +12,7 @@ class MatchBase(BaseModel):
     result: Literal["white", "black", "draw", "none"]
     reason: Literal["normal", "resign", "timeout", "agreement", "abandon",
                     "none"]
-    status: Literal["waiting", "ongoning", "finished", "aborted"]
+    status: Literal["waiting", "ongoing", "finished", "aborted"]
 
     class Config:
         orm_mode = True

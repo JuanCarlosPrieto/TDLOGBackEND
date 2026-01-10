@@ -47,7 +47,7 @@ CREATE TABLE `matches` (
   `whiteuser`  BIGINT UNSIGNED NULL,
   `blackuser`  BIGINT UNSIGNED NULL,
   `result`     ENUM('white','black','draw','none') NOT NULL DEFAULT 'none',
-  `reason`     ENUM('normal','resign','timeout','illegal','agreement','abandon','none') NOT NULL DEFAULT 'none',
+  `reason`     ENUM('normal','resign','timeout','agreement','abandon','none') NOT NULL DEFAULT 'none',
   `status`     ENUM('waiting','ongoing','finished','aborted') NOT NULL DEFAULT 'waiting',
   PRIMARY KEY (`matchid`),
   KEY `idx_matches_status` (`status`),
@@ -59,22 +59,24 @@ CREATE TABLE `matches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------
--- movesmatch
--- Un registro por partida con la lista completa de jugadas.
--- `moves` como JSON (p.ej., ["11-15","22-18","15x22"])
+-- match_moves
+-- Una fila por movimiento que pertenece a una partida
 -- Nota: Para MySQL < 8.0.13 elimina el DEFAULT y manéjalo desde la app.
 -- -----------------------------------
-CREATE TABLE `movesmatch` (
-  `id`        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `matchid`   BIGINT UNSIGNED NOT NULL,
-  `moves`     JSON            NOT NULL DEFAULT (JSON_ARRAY()),
-  `createdat` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updatedat` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+CREATE TABLE `match_moves` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `matchid` BIGINT UNSIGNED NOT NULL,
+  `move_number` INT UNSIGNED NOT NULL,
+  `player` ENUM('white','black') NOT NULL,
+  `move` JSON NOT NULL,
+  `createdat` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
-  UNIQUE KEY `ux_movesmatch_matchid` (`matchid`),
-  CONSTRAINT `fk_movesmatch_match`
-    FOREIGN KEY (`matchid`) REFERENCES `matches`(`matchid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  UNIQUE KEY `ux_match_move_number` (`matchid`, `move_number`),
+  KEY `ix_match_createdat` (`matchid`, `createdat`),
+  CONSTRAINT `fk_match_moves_match`
+    FOREIGN KEY (`matchid`) REFERENCES `matches`(`matchid`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- -----------------------------------
 -- authtoken (refresh tokens)
