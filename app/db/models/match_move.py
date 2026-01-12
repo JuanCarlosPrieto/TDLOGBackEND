@@ -8,6 +8,11 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     func)
+from sqlalchemy import UniqueConstraint
+
+__table_args__ = (
+    UniqueConstraint("matchid", "move_number", name="uq_match_move_number"),
+)
 
 
 match_move_player_enum = Enum(

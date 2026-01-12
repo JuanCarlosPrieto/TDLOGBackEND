@@ -8,6 +8,7 @@ from app.db.models.user import User
 from app.db.models.match_move import MatchMove
 from app.core.ws_manager import connection_manager
 from typing import Any, Dict, List, Optional, Tuple
+from sqlalchemy.exc import IntegrityError
 
 # piece: {"color": "RED"/"BLACK", "king": bool}
 Board = List[List[Optional[Dict[str, Any]]]]
@@ -487,24 +488,51 @@ async def match_socket(
                     must_continue = True
                     new_forced_from = new_pos
 
-            # 9) Next move number
-            last_move = history[-1] if history else None
-            next_number = 1 if last_move is None else last_move.move_number + 1
-
-            # guarda también si fue captura y forced_from, para debug
+            # 9) Save move with safe move_number (LOCK + atomic max)
             move_to_store = dict(move_content)
             move_to_store["was_capture"] = was_cap
 
-            new_move = MatchMove(
-                matchid=matchid,
-                move_number=next_number,
-                player=role,
-                move=move_to_store
-            )
-            db.add(new_move)
-
             try:
-                db.commit()
+                with db.begin():
+                    # Lock match row so only one writer assigns move_number
+                    locked_match = db.execute(
+                        select(Match)
+                        .where(Match.matchid == matchid)
+                        .with_for_update()
+                    ).scalar_one()
+
+                    # Re-check status while locked
+                    if locked_match.status != "ongoing":
+                        raise ValueError("Match not ongoing")
+
+                    last_no = db.execute(
+                        select(func.coalesce(
+                            func.max(MatchMove.move_number), 0))
+                        .where(MatchMove.matchid == matchid)
+                    ).scalar_one()
+
+                    next_number = int(last_no) + 1
+
+                    new_move = MatchMove(
+                        matchid=matchid,
+                        move_number=next_number,
+                        player=role,
+                        move=move_to_store
+                    )
+                    db.add(new_move)
+
+                db.refresh(new_move)
+
+            except IntegrityError:
+                # If UNIQUE(matchid, move_number) triggers, you can retry once
+                db.rollback()
+                await websocket.send_json({
+                    "type": "error",
+                    "payload":
+                    {"detail": "Move numbering conflict. Please resend."}
+                })
+                continue
+
             except Exception as e:
                 db.rollback()
                 await websocket.send_json({
@@ -512,8 +540,6 @@ async def match_socket(
                     "payload": {"detail": f"DB error while saving move: {e}"}
                 })
                 continue
-
-            db.refresh(new_move)
 
             # 10) next_turn depends on chain
             if must_continue:
