@@ -493,21 +493,22 @@ async def match_socket(
             move_to_store["was_capture"] = was_cap
 
             try:
-                with db.begin():
-                    # Lock match row so only one writer assigns move_number
+                move_to_store = dict(move_content)
+                move_to_store["was_capture"] = was_cap
+
+                with db.begin_nested():
                     locked_match = db.execute(
                         select(Match)
                         .where(Match.matchid == matchid)
                         .with_for_update()
                     ).scalar_one()
 
-                    # Re-check status while locked
                     if locked_match.status != "ongoing":
                         raise ValueError("Match not ongoing")
 
                     last_no = db.execute(
-                        select(func.coalesce(
-                            func.max(MatchMove.move_number), 0))
+                        select(func.coalesce(func.max(MatchMove.move_number),
+                                             0))
                         .where(MatchMove.matchid == matchid)
                     ).scalar_one()
 
@@ -521,6 +522,7 @@ async def match_socket(
                     )
                     db.add(new_move)
 
+                db.commit()
                 db.refresh(new_move)
 
             except IntegrityError:
